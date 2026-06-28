@@ -16,7 +16,7 @@ Render is used to host the Express backend because it supports long-running proc
    - **Name**: `mediahub-backend` (or your preferred name)
    - **Region**: Select the region closest to your target users.
    - **Branch**: `main` (or your active development branch)
-   - **Root Directory**: `mediahub/backend`
+   - **Root Directory**: `backend`
    - **Runtime**: `Node`
    - **Build Command**: `npm install && npm run build`  *(This will automatically download the correct Linux `yt-dlp` binary and compile the TypeScript code)*
    - **Start Command**: `npm start`
@@ -45,7 +45,7 @@ Vercel is the recommended platform for hosting the Next.js frontend. It offers z
 4. In the configuration screen:
    - **Project Name**: `mediahub`
    - **Framework Preset**: `Next.js`
-   - **Root Directory**: Click *Edit* and select **`mediahub/frontend`**.
+   - **Root Directory**: Click *Edit* and select **`frontend`**.
 5. Expand the **Environment Variables** section and add:
    - **Key**: `NEXT_PUBLIC_API_URL`
    - **Value**: `https://your-backend-domain.onrender.com` (Paste the URL of your deployed Render backend)
