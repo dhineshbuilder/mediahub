@@ -31,15 +31,14 @@ Render is used to host the Express backend because it supports long-running proc
    - `MAX_FILE_SIZE`: `53687091200` (Max allowed download size in bytes)
    - Optional YouTube auth helpers if public downloads start hitting bot checks:
      - `YOUTUBE_API_KEY`: `your_youtube_data_api_key` for metadata lookups
-     - `YTDLP_COOKIES_FILE`: `/path/to/cookies.txt` if you have an exported cookie jar
-     - `YTDLP_COOKIES_BASE64`: paste the full `cookies.txt` contents encoded as base64
-     - `YTDLP_COOKIES_FROM_BROWSER`: `chrome` or `firefox` if the backend runs on a machine with browser cookies available
+     - `YTDLP_COOKIES_FILE`: `/etc/secrets/cookies.txt` when using a Render Secret File
+     - `YTDLP_COOKIES_FROM_BROWSER`: `chrome` or `firefox` only if the backend runs on a machine with browser cookies available
      - `YTDLP_USE_OAUTH2`: `true` only if you intentionally want yt-dlp to use OAuth2 auth
      - `YTDLP_CACHE_DIR`: optional cache location if you want yt-dlp to reuse extractor state
 
    - Recommended deployment setup:
      - Local development on your PC: `YTDLP_COOKIES_FILE=cookies.txt`
-     - Render: `YTDLP_COOKIES_BASE64=<base64-encoded cookies.txt>` so no cookie file has to live in the repository or on disk
+     - Render: add a **Secret File** named `cookies.txt`, paste the raw Netscape cookie file contents, then set `YTDLP_COOKIES_FILE=/etc/secrets/cookies.txt`
      - Vercel frontend: no cookie env vars are needed there, because the frontend never talks to yt-dlp directly
 
 6. Click **Create Web Service**. Render will build and deploy your backend. Copy the generated URL (e.g., `https://mediahub-backend.onrender.com`).
@@ -72,7 +71,11 @@ Vercel is the recommended platform for hosting the Next.js frontend. It offers z
    - Update the `FRONTEND_URL` environment variable to match your production Vercel URL (e.g. `https://mediahub.vercel.app`).
    - Redeploy the backend service to apply the updated CORS origin safety rules.
 
-2. **Verify Tool Functionality**:
+2. **Render Secret File Check**:
+   - Confirm the `cookies.txt` secret file exists in Render and that `YTDLP_COOKIES_FILE` points to `/etc/secrets/cookies.txt`.
+   - If you change the secret file, redeploy the backend so the new cookie jar is available at runtime.
+
+3. **Verify Tool Functionality**:
    - Visit your Vercel URL.
    - Test the **Media Downloader** tool by pasting a YouTube link.
    - Test the **AI Subtitle Generator** tool by uploading a short audio file.

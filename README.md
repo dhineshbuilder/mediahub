@@ -131,8 +131,8 @@ The app starts on `http://localhost:3000`.
 | `FRONTEND_URL`     | Allowed CORS origin                  | `http://localhost:3000`  |
 | `MAX_FILE_SIZE`    | Max download size in bytes           | `104857600` (100 MB)     |
 | `DOWNLOAD_TIMEOUT` | Download timeout in ms               | `60000` (60 s)           |
-| `YTDLP_COOKIES_FROM_BROWSER` | Browser for yt-dlp cookies       | `chrome`                 |
-| `YTDLP_COOKIES_FILE` | Exported cookies.txt path           | unset                    |
+| `YTDLP_COOKIES_FILE` | Exported `cookies.txt` path or Render secret file path | unset |
+| `YTDLP_COOKIES_FROM_BROWSER` | Browser for yt-dlp cookies if running on a machine with browser access | `chrome` |
 
 ---
 
@@ -217,7 +217,9 @@ npm start        # Starts production server on port 3000
    - `PORT=5000`
    - `NODE_ENV=production`
    - `FRONTEND_URL=https://your-mediahub-frontend.vercel.app`
-7. Deploy.
+   - `YTDLP_COOKIES_FILE=/etc/secrets/cookies.txt` if you add the cookie jar as a Render **Secret File**
+7. Add a Render **Secret File** named `cookies.txt` and paste the raw Netscape cookie file contents if you need YouTube auth for yt-dlp.
+8. Deploy.
 
 ---
 

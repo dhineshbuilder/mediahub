@@ -84,7 +84,12 @@ function resolveQualityHeight(quality: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-let resolvedCookiesFilePromise: Promise<string | undefined> | null = null;
+type ResolvedCookieMaterial = {
+  filePath?: string;
+  rawText?: string;
+};
+
+let resolvedCookieMaterialPromise: Promise<ResolvedCookieMaterial | undefined> | null = null;
 
 async function fileExists(filePath: string): Promise<boolean> {
   try {
@@ -95,19 +100,48 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
-async function resolveCookiesFile(): Promise<string | undefined> {
-  if (resolvedCookiesFilePromise) {
-    return resolvedCookiesFilePromise;
+function buildCookieHeaderFromNetscapeJar(cookieText: string): string | undefined {
+  const pairs = new Map<string, string>();
+
+  for (const line of cookieText.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const parts = line.split('\t');
+    if (parts.length < 7) continue;
+
+    const name = parts[5]?.trim();
+    const value = parts.slice(6).join('\t').trim();
+    if (!name || !value) continue;
+
+    pairs.set(name, value);
   }
 
-  resolvedCookiesFilePromise = (async () => {
+  if (pairs.size === 0) {
+    return undefined;
+  }
+
+  return Array.from(pairs.entries())
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ');
+}
+
+async function resolveCookieMaterial(): Promise<ResolvedCookieMaterial | undefined> {
+  if (resolvedCookieMaterialPromise) {
+    return resolvedCookieMaterialPromise;
+  }
+
+  resolvedCookieMaterialPromise = (async () => {
     const configuredPath = env.YTDLP_COOKIES_FILE?.trim();
     if (configuredPath) {
       const candidate = path.isAbsolute(configuredPath)
         ? configuredPath
         : path.resolve(process.cwd(), configuredPath);
       if (await fileExists(candidate)) {
-        return candidate;
+        return {
+          filePath: candidate,
+          rawText: await fs.readFile(candidate, 'utf8'),
+        };
       }
       logger.warn(`YTDLP_COOKIES_FILE was set but the file was not found: ${candidate}`);
     }
@@ -120,13 +154,29 @@ async function resolveCookiesFile(): Promise<string | undefined> {
       const cookiePath = path.join(tempDir, 'yt-dlp-cookies.txt');
       const decoded = Buffer.from(encodedCookies, 'base64').toString('utf8');
       await fs.writeFile(cookiePath, decoded, 'utf8');
-      return cookiePath;
+      return {
+        filePath: cookiePath,
+        rawText: decoded,
+      };
     }
 
     return undefined;
   })();
 
-  return resolvedCookiesFilePromise;
+  return resolvedCookieMaterialPromise;
+}
+
+async function resolveCookiesFile(): Promise<string | undefined> {
+  return (await resolveCookieMaterial())?.filePath;
+}
+
+async function resolveYoutubeCookieHeader(): Promise<string | undefined> {
+  const cookieMaterial = await resolveCookieMaterial();
+  if (!cookieMaterial?.rawText) {
+    return undefined;
+  }
+
+  return buildCookieHeaderFromNetscapeJar(cookieMaterial.rawText);
 }
 
 async function buildCookieArgsAsync(): Promise<string[]> {
@@ -212,9 +262,13 @@ let youtubeClientPromise: Promise<Innertube> | null = null;
 
 async function getYoutubeClient(): Promise<Innertube> {
   if (!youtubeClientPromise) {
-    youtubeClientPromise = Innertube.create({
-      retrieve_player: true,
-    });
+    youtubeClientPromise = (async () => {
+      const cookie = await resolveYoutubeCookieHeader();
+      return Innertube.create({
+        retrieve_player: true,
+        ...(cookie ? { cookie } : {}),
+      });
+    })();
   }
 
   return youtubeClientPromise;
