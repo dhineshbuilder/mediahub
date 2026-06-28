@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+cookies.txt
 *.log
 temp/*
 !temp/.gitkeep

@@ -84,11 +84,57 @@ function resolveQualityHeight(quality: string): number | undefined {
   return match ? Number(match[1]) : undefined;
 }
 
-function buildCookieArgs(): string[] {
+let resolvedCookiesFilePromise: Promise<string | undefined> | null = null;
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveCookiesFile(): Promise<string | undefined> {
+  if (resolvedCookiesFilePromise) {
+    return resolvedCookiesFilePromise;
+  }
+
+  resolvedCookiesFilePromise = (async () => {
+    const configuredPath = env.YTDLP_COOKIES_FILE?.trim();
+    if (configuredPath) {
+      const candidate = path.isAbsolute(configuredPath)
+        ? configuredPath
+        : path.resolve(process.cwd(), configuredPath);
+      if (await fileExists(candidate)) {
+        return candidate;
+      }
+      logger.warn(`YTDLP_COOKIES_FILE was set but the file was not found: ${candidate}`);
+    }
+
+    const encodedCookies = env.YTDLP_COOKIES_BASE64?.trim();
+    if (encodedCookies) {
+      const tempDir = path.join(process.cwd(), 'temp');
+      await fs.mkdir(tempDir, { recursive: true });
+
+      const cookiePath = path.join(tempDir, 'yt-dlp-cookies.txt');
+      const decoded = Buffer.from(encodedCookies, 'base64').toString('utf8');
+      await fs.writeFile(cookiePath, decoded, 'utf8');
+      return cookiePath;
+    }
+
+    return undefined;
+  })();
+
+  return resolvedCookiesFilePromise;
+}
+
+async function buildCookieArgsAsync(): Promise<string[]> {
   const args: string[] = [];
-  
-  if (env.YTDLP_COOKIES_FILE?.trim()) {
-    args.push('--cookies', env.YTDLP_COOKIES_FILE.trim());
+
+  const cookiesFile = await resolveCookiesFile();
+  if (cookiesFile) {
+    args.push('--cookies', cookiesFile);
   } else if (env.YTDLP_COOKIES_FROM_BROWSER?.trim()) {
     args.push('--cookies-from-browser', env.YTDLP_COOKIES_FROM_BROWSER.trim());
   }
@@ -104,9 +150,9 @@ function buildCookieArgs(): string[] {
   return args;
 }
 
-function buildYtDlpArgs(args: string[]): string[] {
+async function buildYtDlpArgs(args: string[]): Promise<string[]> {
   return [
-    ...buildCookieArgs(),
+    ...(await buildCookieArgsAsync()),
     '--extractor-args', 'youtube:player_client=web_embedded,android,ios,tv_embedded',
     '--add-headers', 'User-Agent:com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip',
     '--no-check-certificates',
@@ -115,7 +161,7 @@ function buildYtDlpArgs(args: string[]): string[] {
 }
 
 async function runYtDlp(args: string[]): Promise<string> {
-  return ytDlp(buildYtDlpArgs(args));
+  return ytDlp(await buildYtDlpArgs(args));
 }
 
 type YoutubeIFormat = {
@@ -458,7 +504,7 @@ export class YouTubeProvider extends GenericProvider {
     try {
       logger.info(`Analyzing YouTube URL via yt-dlp: ${url}`);
 
-      const jsonStr = await ytDlp(buildYtDlpArgs([
+      const jsonStr = await ytDlp(await buildYtDlpArgs([
         '--dump-json',
         '--no-playlist',
         '--no-warnings',
@@ -751,7 +797,7 @@ export class YouTubeProvider extends GenericProvider {
       }
 
       // Get JSON info to determine filename and content type
-      const jsonStr = await ytDlp(buildYtDlpArgs([
+      const jsonStr = await ytDlp(await buildYtDlpArgs([
         '--dump-json',
         '--no-playlist',
         '--no-warnings',
@@ -767,7 +813,7 @@ export class YouTubeProvider extends GenericProvider {
 
       if (type === 'audio') {
         // Audio-only can still be streamed directly.
-        const dlProc = spawn(getYtDlpCommand(), buildYtDlpArgs([
+        const dlProc = spawn(getYtDlpCommand(), await buildYtDlpArgs([
           '--no-playlist',
           '--no-warnings',
           '--format', formatArg,

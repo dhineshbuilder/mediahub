@@ -11,6 +11,7 @@ const envSchema = z.object({
   DOWNLOAD_TIMEOUT: z.coerce.number().default(60000), // Default 60s
   YTDLP_COOKIES_FROM_BROWSER: z.string().optional(),
   YTDLP_COOKIES_FILE: z.string().optional(),
+  YTDLP_COOKIES_BASE64: z.string().optional(),
   YTDLP_USE_OAUTH2: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(false)),
   YTDLP_CACHE_DIR: z.string().optional(),
   YOUTUBE_API_KEY: z.string().optional(),

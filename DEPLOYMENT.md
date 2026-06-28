@@ -29,6 +29,18 @@ Render is used to host the Express backend because it supports long-running proc
    - `FRONTEND_URL`: `https://your-frontend-domain.vercel.app` (You can update this after deploying the frontend on Vercel)
    - `DOWNLOAD_TIMEOUT`: `0` (Disables timeout limits for larger downloads)
    - `MAX_FILE_SIZE`: `53687091200` (Max allowed download size in bytes)
+   - Optional YouTube auth helpers if public downloads start hitting bot checks:
+     - `YOUTUBE_API_KEY`: `your_youtube_data_api_key` for metadata lookups
+     - `YTDLP_COOKIES_FILE`: `/path/to/cookies.txt` if you have an exported cookie jar
+     - `YTDLP_COOKIES_BASE64`: paste the full `cookies.txt` contents encoded as base64
+     - `YTDLP_COOKIES_FROM_BROWSER`: `chrome` or `firefox` if the backend runs on a machine with browser cookies available
+     - `YTDLP_USE_OAUTH2`: `true` only if you intentionally want yt-dlp to use OAuth2 auth
+     - `YTDLP_CACHE_DIR`: optional cache location if you want yt-dlp to reuse extractor state
+
+   - Recommended deployment setup:
+     - Local development on your PC: `YTDLP_COOKIES_FILE=cookies.txt`
+     - Render: `YTDLP_COOKIES_BASE64=<base64-encoded cookies.txt>` so no cookie file has to live in the repository or on disk
+     - Vercel frontend: no cookie env vars are needed there, because the frontend never talks to yt-dlp directly
 
 6. Click **Create Web Service**. Render will build and deploy your backend. Copy the generated URL (e.g., `https://mediahub-backend.onrender.com`).
 
