@@ -103,7 +103,11 @@ function buildCookieArgs(): string[] {
 }
 
 function buildYtDlpArgs(args: string[]): string[] {
-  return [...buildCookieArgs(), ...args];
+  return [
+    ...buildCookieArgs(),
+    '--extractor-args', 'youtube:player-client=android,ios',
+    ...args
+  ];
 }
 
 async function runYtDlp(args: string[]): Promise<string> {
@@ -319,14 +323,13 @@ export class YouTubeProvider extends GenericProvider {
 
       if (type === 'audio') {
         // Audio-only can still be streamed directly.
-        const dlProc = spawn(getYtDlpCommand(), [
-          ...buildCookieArgs(),
+        const dlProc = spawn(getYtDlpCommand(), buildYtDlpArgs([
           '--no-playlist',
           '--no-warnings',
           '--format', formatArg,
           '--output', '-',
           url,
-        ], { windowsHide: true });
+        ]), { windowsHide: true });
 
         const stream = dlProc.stdout;
 
