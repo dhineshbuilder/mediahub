@@ -48,7 +48,12 @@ function downloadFile(downloadUrl) {
 
 async function main() {
   try {
-    if (fs.existsSync(filePath)) {
+    const shouldRefreshExistingBinary =
+      process.env.RENDER === 'true' ||
+      process.env.NODE_ENV === 'production' ||
+      process.env.FORCE_YTDLP_DOWNLOAD === 'true';
+
+    if (fs.existsSync(filePath) && !shouldRefreshExistingBinary) {
       console.log(`ℹ️ yt-dlp binary already exists at ${filePath}. Skipping download.`);
       return;
     }

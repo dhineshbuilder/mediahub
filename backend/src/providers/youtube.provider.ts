@@ -100,6 +100,29 @@ async function fileExists(filePath: string): Promise<boolean> {
   }
 }
 
+function areCookiesConfigured(): boolean {
+  return !!(
+    env.YTDLP_COOKIES_FILE?.trim() ||
+    env.YTDLP_COOKIES_BASE64?.trim() ||
+    env.YTDLP_COOKIES_FROM_BROWSER?.trim()
+  );
+}
+
+async function checkCookieConfiguration(): Promise<void> {
+  const configuredPath = env.YTDLP_COOKIES_FILE?.trim();
+  if (configuredPath) {
+    const candidate = path.isAbsolute(configuredPath)
+      ? configuredPath
+      : path.resolve(process.cwd(), configuredPath);
+    if (!(await fileExists(candidate))) {
+      throw new AppError(
+        `YouTube cookie file configured at '${configuredPath}' but the file was not found. Please upload or check your cookie file path.`,
+        401
+      );
+    }
+  }
+}
+
 function buildCookieHeaderFromNetscapeJar(cookieText: string): string | undefined {
   const pairs = new Map<string, string>();
 
@@ -397,9 +420,19 @@ export class YouTubeProvider extends GenericProvider {
       return this.analyzeWithDataApi(url);
     }
     try {
+      await checkCookieConfiguration();
       return await this.analyzeWithYtDlp(url);
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
+      
+      if (areCookiesConfigured()) {
+        if (error instanceof AppError) throw error;
+        if (isRetryableYoutubeError(errMsg)) {
+          throw new AppError(`YouTube authentication failed: cookies are stale or invalid. Please update your cookies.txt or YTDLP_COOKIES_BASE64. Details: ${errMsg}`, 401);
+        }
+        throw error;
+      }
+
       if (shouldUseYoutubeIFallback(errMsg)) {
         logger.warn(`yt-dlp metadata lookup failed for YouTube; retrying with YouTube.js: ${errMsg}`);
         return this.analyzeWithYoutubeI(url);
@@ -479,9 +512,19 @@ export class YouTubeProvider extends GenericProvider {
       logger.error(`YouTube Data API error: ${errMsg} — falling back to yt-dlp`);
       // Gracefully fall back to yt-dlp if the API call fails
       try {
+        await checkCookieConfiguration();
         return await this.analyzeWithYtDlp(url);
       } catch (ytDlpError: unknown) {
         const ytDlpMsg = ytDlpError instanceof Error ? ytDlpError.message : String(ytDlpError);
+        
+        if (areCookiesConfigured()) {
+          if (ytDlpError instanceof AppError) throw ytDlpError;
+          if (isRetryableYoutubeError(ytDlpMsg)) {
+            throw new AppError(`YouTube authentication failed: cookies are stale or invalid. Please update your cookies.txt or YTDLP_COOKIES_BASE64. Details: ${ytDlpMsg}`, 401);
+          }
+          throw ytDlpError;
+        }
+
         if (shouldUseYoutubeIFallback(ytDlpMsg)) {
           logger.warn(`yt-dlp metadata lookup failed after Data API fallback; retrying with YouTube.js: ${ytDlpMsg}`);
           return this.analyzeWithYoutubeI(url);
@@ -835,6 +878,7 @@ export class YouTubeProvider extends GenericProvider {
     type: 'audio' | 'both'
   ): Promise<ProviderResponse> {
     try {
+      await checkCookieConfiguration();
       logger.info(`Streaming YouTube download via yt-dlp: quality=${quality}, type=${type}`);
 
       // Select format string based on type and quality
@@ -958,6 +1002,15 @@ export class YouTubeProvider extends GenericProvider {
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
       logger.error(`Error in YouTubeProvider.download: ${errMsg}`);
+      
+      if (areCookiesConfigured()) {
+        if (error instanceof AppError) throw error;
+        if (isRetryableYoutubeError(errMsg)) {
+          throw new AppError(`YouTube download failed: cookies are stale or invalid. Please update your cookies.txt or YTDLP_COOKIES_BASE64. Details: ${errMsg}`, 401);
+        }
+        throw new AppError(`Failed to download YouTube video: ${errMsg}`, 502);
+      }
+
       if (shouldUseYoutubeIFallback(errMsg)) {
         logger.warn(`yt-dlp download failed for YouTube; retrying with YouTube.js: ${errMsg}`);
         return this.downloadWithYoutubeI(url, quality, type);
