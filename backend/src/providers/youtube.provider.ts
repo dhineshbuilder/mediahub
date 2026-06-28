@@ -105,7 +105,9 @@ function buildCookieArgs(): string[] {
 function buildYtDlpArgs(args: string[]): string[] {
   return [
     ...buildCookieArgs(),
-    '--extractor-args', 'youtube:player-client=android,ios',
+    '--extractor-args', 'youtube:player-client=tv_embedded,android,ios',
+    '--add-headers', 'User-Agent:com.google.android.youtube/17.36.4 (Linux; U; Android 12; GB) gzip',
+    '--no-check-certificates',
     ...args
   ];
 }
