@@ -151,7 +151,112 @@ export class YouTubeProvider extends GenericProvider {
     }
   }
 
+  /**
+   * Analyze using YouTube Data API v3 if YOUTUBE_API_KEY is configured.
+   * Falls back to yt-dlp if the API key is absent.
+   */
   public override async analyze(url: string): Promise<MediaMetadata> {
+    if (env.YOUTUBE_API_KEY) {
+      return this.analyzeWithDataApi(url);
+    }
+    return this.analyzeWithYtDlp(url);
+  }
+
+  /** Fetch metadata using the official YouTube Data API v3 (no bot detection, scales to millions of users) */
+  private async analyzeWithDataApi(url: string): Promise<MediaMetadata> {
+    try {
+      logger.info(`Analyzing YouTube URL via Data API v3: ${url}`);
+
+      const videoId = this.extractVideoId(url);
+      if (!videoId) {
+        throw new Error('Could not extract a valid YouTube video ID from the URL.');
+      }
+
+      const apiUrl =
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${env.YOUTUBE_API_KEY}`;
+
+      const resp = await fetch(apiUrl);
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({})) as Record<string, unknown>;
+        const apiErr = (errBody as { error?: { message?: string } }).error?.message || `YouTube API returned ${resp.status}`;
+        throw new Error(apiErr);
+      }
+
+      const data = await resp.json() as {
+        items?: {
+          snippet: {
+            title: string;
+            channelTitle: string;
+            thumbnails: { maxres?: { url: string }; high?: { url: string }; medium?: { url: string } };
+          };
+          contentDetails: { duration: string };
+        }[];
+      };
+
+      if (!data.items || data.items.length === 0) {
+        throw new Error('YouTube video not found or is private.');
+      }
+
+      const item = data.items[0];
+      const snippet = item.snippet;
+      const thumbs = snippet.thumbnails;
+      const thumbnail =
+        thumbs.maxres?.url ||
+        thumbs.high?.url ||
+        thumbs.medium?.url ||
+        `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+
+      // Parse ISO 8601 duration (PT4M13S → seconds)
+      const durationSec = this.parseIsoDuration(item.contentDetails.duration);
+
+      // Build a standard set of quality formats – we can't enumerate adaptive formats
+      // without yt-dlp, so we expose the common quality tiers.
+      const qualityTiers: MediaFormat[] = [
+        { quality: '1080p', type: 'both', url, ext: 'mp4' },
+        { quality: '720p', type: 'both', url, ext: 'mp4' },
+        { quality: '480p', type: 'both', url, ext: 'mp4' },
+        { quality: '360p', type: 'both', url, ext: 'mp4' },
+        { quality: 'Audio 128kbps', type: 'audio', url, ext: 'm4a' },
+      ];
+
+      return {
+        success: true,
+        platform: 'YouTube',
+        title: this.cleanHtmlEntities(snippet.title),
+        thumbnail,
+        duration: formatDuration(durationSec),
+        uploader: this.cleanHtmlEntities(snippet.channelTitle),
+        formats: qualityTiers,
+      };
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : String(error);
+      logger.error(`YouTube Data API error: ${errMsg} — falling back to yt-dlp`);
+      // Gracefully fall back to yt-dlp if the API call fails
+      return this.analyzeWithYtDlp(url);
+    }
+  }
+
+  /** Extract the 11-character video ID from any YouTube URL format */
+  private extractVideoId(url: string): string | null {
+    const patterns = [
+      /(?:v=|\/v\/|youtu\.be\/|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/,
+    ];
+    for (const p of patterns) {
+      const m = url.match(p);
+      if (m) return m[1];
+    }
+    return null;
+  }
+
+  /** Parse an ISO 8601 duration string (e.g. PT1H4M13S) into seconds */
+  private parseIsoDuration(iso: string): number {
+    const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!m) return 0;
+    return (Number(m[1] || 0) * 3600) + (Number(m[2] || 0) * 60) + Number(m[3] || 0);
+  }
+
+  /** Original yt-dlp-based analyze (used as fallback when no API key is set) */
+  private async analyzeWithYtDlp(url: string): Promise<MediaMetadata> {
     try {
       logger.info(`Analyzing YouTube URL via yt-dlp: ${url}`);
 
@@ -280,7 +385,7 @@ export class YouTubeProvider extends GenericProvider {
       };
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : String(error);
-      logger.error(`Error in YouTubeProvider.analyze: ${errMsg}`);
+      logger.error(`Error in YouTubeProvider.analyzeWithYtDlp: ${errMsg}`);
       throw new AppError(`Failed to fetch YouTube metadata: ${errMsg}`, 400);
     }
   }

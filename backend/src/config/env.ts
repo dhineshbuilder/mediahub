@@ -13,6 +13,7 @@ const envSchema = z.object({
   YTDLP_COOKIES_FILE: z.string().optional(),
   YTDLP_USE_OAUTH2: z.preprocess((val) => val === 'true' || val === true, z.boolean().default(false)),
   YTDLP_CACHE_DIR: z.string().optional(),
+  YOUTUBE_API_KEY: z.string().optional(),
   GROQ_API_KEY: z.string().optional(),
   GROQ_TRANSCRIPTION_MODEL: z.string().default('whisper-large-v3'),
   CAPTION_AUDIO_CHUNK_SECONDS: z.coerce.number().default(600),
