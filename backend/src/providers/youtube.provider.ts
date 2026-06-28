@@ -83,15 +83,23 @@ function resolveQualityHeight(quality: string): number | undefined {
 }
 
 function buildCookieArgs(): string[] {
+  const args: string[] = [];
+  
   if (env.YTDLP_COOKIES_FILE?.trim()) {
-    return ['--cookies', env.YTDLP_COOKIES_FILE.trim()];
+    args.push('--cookies', env.YTDLP_COOKIES_FILE.trim());
+  } else if (env.YTDLP_COOKIES_FROM_BROWSER?.trim()) {
+    args.push('--cookies-from-browser', env.YTDLP_COOKIES_FROM_BROWSER.trim());
   }
 
-  if (env.YTDLP_COOKIES_FROM_BROWSER?.trim()) {
-    return ['--cookies-from-browser', env.YTDLP_COOKIES_FROM_BROWSER.trim()];
+  if (env.YTDLP_USE_OAUTH2) {
+    args.push('--username', 'oauth2', '--password', '');
   }
 
-  return [];
+  if (env.YTDLP_CACHE_DIR?.trim()) {
+    args.push('--cache-dir', env.YTDLP_CACHE_DIR.trim());
+  }
+
+  return args;
 }
 
 function buildYtDlpArgs(args: string[]): string[] {
